@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<title>69s Camera</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="manifest" href="site.webmanifest">
+<div id="main">
+  <video id="camera-stream" class="off" autoplay loop muted>
+    <source src="" />
+  </video>
+  <canvas id="canvas" class="hidden"></canvas>
+  <div id="buttons">
+    <button id="flash_button">
+      <svg id="flash_on" class="hidden" viewBox="0 0 40.82 58.523">
+        <path stroke="#fff" fill="#fff"
+          d="M7.541 32.506h12.461l-6.703 17.982c-.344.903.472 1.246 1.031.559l19.078-23.998c.194-.236.322-.43.322-.666 0-.15-.064-.365-.43-.365H20.84l6.703-17.961c.344-.924-.494-1.268-1.053-.559L7.412 31.475c-.172.236-.322.43-.322.666 0 .15.086.365.451.365z" />
+      </svg>
+      <svg id="flash_off" viewBox="0 0 40.842 58.523">
+        <path stroke="#fff" fill="#fff"
+          d="m28.016 33.816 5.392-6.767c.194-.236.322-.43.322-.666 0-.15-.064-.365-.43-.365H20.84l6.703-17.961c.344-.924-.494-1.268-1.053-.559L15.512 21.312zm8.593 12.418a.545.545 0 0 0 .774 0 .565.565 0 0 0 0-.773L4.21 12.289c-.15-.15-.559-.193-.752 0a.545.545 0 0 0 0 .774zM14.33 51.047l11-13.836-12.525-12.504-5.393 6.768c-.172.236-.322.43-.322.666 0 .15.086.365.451.365h12.461l-6.703 17.982c-.344.903.472 1.246 1.031.559z" />
+      </svg>
+    </button>
+    <button id="shutter"></button>
+    <div id="after" class="hidden">
+      <button id="back">Back</button>
+      <button id="save">Save</button>
+      <a id="link"></a>
+    </div>
+  </div>
+  <div class="hidden">
+    <img id="lut_img" src="lut.png" width="512px" height="512px" />
+    <canvas id="lut_canvas"></canvas>
+  </div>
+  <div id="flash" class="hidden"></div>
+</div>
+<style>
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    background: black;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .flex {
+    display: flex;
+  }
+
+  .off {
+    opacity: 0;
+    filter: blur(6pt);
+  }
+
+  #flash_button {
+    border: none;
+    background: transparent;
+    padding: 12pt;
+    transition-duration: 120ms;
+  }
+
+  #flash_button:active {
+    transform: scale(0.333);
+    filter: blur(1.2pt);
+    opacity: 0.666;
+  }
+
+  #flash_button svg {
+    width: 32pt;
+    height: 32pt;
+    background: transparent;
+  }
+
+  #camera-stream {
+    transform: scaleX(-1);
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition-duration: 1.2s;
+    border-radius: 12pt;
+  }
+
+  #canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  #main {
+    display: flex;
+    width: 100dvw;
+    height: 100dvh;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #flash {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: white;
+  }
+
+  #link {
+    display: none;
+  }
+
+  #shutter {
+    border: none;
+    width: 32pt;
+    height: 32pt;
+    background: white;
+    border-radius: 100%;
+    margin: 16pt;
+    outline: white solid 3pt;
+    outline-offset: 3pt;
+    transition-duration: 120ms;
+  }
+
+  #shutter:active {
+    transform: scale(0.9);
+  }
+
+  #buttons {
+    background: none;
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    justify-content: space-between;
+  }
+
+
+  #after button {
+    border: none;
+    padding: 0.5rem 1.5rem;
+    background: white;
+    border-radius: 2rem;
+    margin: 12pt;
+    color: black;
+    font-weight: 600;
+    transition-duration: 120ms;
+  }
+
+  #after button:active {
+    transform: scale(0.9);
+  }
+</style>
+<script>
+  const lut_img = document.getElementById('lut_img');
+  lut_img.addEventListener('load', () => {
+    const cameraVideoStream = document.getElementById('camera-stream');
+    const shutterButton = document.getElementById('shutter');
+    const afterButtons = document.getElementById('after');
+    const backButton = document.getElementById('back');
+    const saveButton = document.getElementById('save');
+    const linkButton = document.getElementById('link');
+    const flash = document.getElementById('flash');
+    const canvas = document.getElementById('canvas');
+    const lut_canvas = document.getElementById('lut_canvas');
+    lut_canvas.width = lut_canvas.height = 512;
+    const flashToggle = document.getElementById('flash_button');
+    const flashOn = document.getElementById('flash_on');
+    const flashOff = document.getElementById('flash_off');
+    let isFlash = false;
+
+    const ctx = lut_canvas.getContext('2d');
+    ctx.drawImage(lut_img, 0, 0);
+    const lut = ctx.getImageData(0, 0, 512, 512);
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia({video: true})) {
+      navigator.mediaDevices
+        .getUserMedia({
+          video: true
+        })
+        .then((stream) => {
+          cameraVideoStream.srcObject = stream;
+          cameraVideoStream.play();
+          cameraVideoStream.classList.remove("off");
+        })
+    }
+
+    let width = 0
+    let height = 0
+    let streaming = false
+
+    cameraVideoStream.addEventListener(
+      "canplay",
+      (ev) => {
+        if (!streaming) {
+          width = cameraVideoStream.videoWidth;
+          height = cameraVideoStream.videoHeight;
+
+          canvas.setAttribute("width", width);
+          canvas.setAttribute("height", height);
+          cameraVideoStream.setAttribute("width", width);
+          cameraVideoStream.setAttribute("height", height);
+          streaming = true;
+        }
+      },
+      false
+    );
+
+    const d = new Date();
+    let random = d.getSeconds();
+
+    const captureImage = () => {
+      const canvasContext = canvas.getContext('2d')
+      canvas.width = width;
+      canvas.height = height;
+      canvasContext.drawImage(cameraVideoStream, 0, 0, width, height);
+
+      afterButtons.classList.remove("hidden");
+      afterButtons.classList.add("flex");
+      shutterButton.classList.add("hidden");
+      canvas.classList.remove("hidden");
+      cameraVideoStream.classList.add("hidden");
+
+      const img = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+      for (let j = 0; j < canvas.height; j++) {
+        const jdx = j * (canvas.width << 2);
+        for (let i = 0; i < canvas.width; i++) {
+          random ^= random << 7;
+          random ^= random >> 9;
+          const alpha = ((random & 255) * 0.001) + 0.75;
+
+          const idx = jdx + (i << 2);
+
+          const r = img.data[idx];
+          const g = img.data[idx + 1];
+          const b = img.data[idx + 2];
+
+          const x = (r >> 2) + (((b >> 2) & 7) << 6);
+          const y = (g >> 2) + ((b >> 5) << 6);
+
+          img.data[idx] = lut.data[(y << 11) + (x << 2)] * alpha;
+          img.data[idx + 1] = lut.data[(y << 11) + (x << 2) + 1] * alpha;
+          img.data[idx + 2] = lut.data[(y << 11) + (x << 2) + 2] * alpha;
+        }
+      }
+      canvasContext.putImageData(img, 0, 0);
+
+      linkButton.setAttribute('download', 'image.png');
+      linkButton.setAttribute('href', canvas.toDataURL("image/png").replace("image/png", "image/octet-stream"));
+    }
+
+    const goBack = () => {
+      afterButtons.classList.add("hidden");
+      afterButtons.classList.remove("flex");
+      shutterButton.classList.remove("hidden");
+      canvas.classList.add("hidden");
+      cameraVideoStream.classList.remove("hidden");
+    }
+
+    const save = () => {
+      linkButton.click()
+    }
+
+    const toggleFlash = () => {
+      flashOn.classList.toggle("hidden");
+      flashOff.classList.toggle("hidden");
+      isFlash = !isFlash;
+    }
+
+    shutterButton.addEventListener('click', () => {
+      if (isFlash) {
+        flash.classList.remove("hidden");
+        setTimeout(() => {
+          captureImage();
+          flash.classList.add("hidden");
+        }, 2000);
+      } else {
+        captureImage();
+      }
+    });
+
+    backButton.addEventListener('click', () => goBack());
+    saveButton.addEventListener('click', () => save());
+    flashToggle.addEventListener('click', () => toggleFlash());
+  });
+</script>
